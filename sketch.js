@@ -197,8 +197,8 @@ function draw() {
         text('FPS: ' + previousFrameRate, width - 160, 35);
         text('Gen: ' + population.gen, 30, 35);
         text('Moves: ' + population.players[0].brain.instructions.length, 200, 35);
-        text('Best Height: ' + population.bestHeight, 400, 35);
-        text('Speed: ' + evolationSpeed + 'x', 650, 35);
+        text('Best: ' + population.bestHeight, 400, 35);
+        text('Spd:' + evolationSpeed, 560, 35);
     }
 
 
@@ -379,17 +379,25 @@ function keyReleased() {
             break;
     }
     
-    switch (key) {
-        case '-':
-        case '_':
-            evolationSpeed = constrain(evolationSpeed - 1, 1, 50);
-            print("Speed:", evolationSpeed);
-            break;
-        case '=':
-        case '+':
-            evolationSpeed = constrain(evolationSpeed + 1, 1, 50);
-            print("Speed:", evolationSpeed);
-            break;
+    if (key === '-' || key === '_' || key === '[') {
+        evolationSpeed = constrain(evolationSpeed - 1, 1, 50);
+        print("Speed:", evolationSpeed);
+    }
+    if (key === '=' || key === '+' || key === ']') {
+        evolationSpeed = constrain(evolationSpeed + 1, 1, 50);
+        print("Speed:", evolationSpeed);
+    }
+    if (key === '0') {
+        evolationSpeed = 1;
+        print("Speed reset:", evolationSpeed);
+    }
+    if (key === '9') {
+        evolationSpeed = 10;
+        print("Speed set to 10:", evolationSpeed);
+    }
+    if (key === '8') {
+        evolationSpeed = 50;
+        print("Speed set to max:", evolationSpeed);
     }
 }
 
