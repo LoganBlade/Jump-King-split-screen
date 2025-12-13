@@ -136,6 +136,27 @@ class Brain {
         console.log('Brain saved! Generation: ' + gen + ', Moves: ' + brain.instructions.length);
     }
 
+    // Save brain to a downloadable JSON file so users can drag this file back onto the page
+    static saveBestBrainToFile(brain, gen) {
+        const data = {
+            brain: brain.toJSON(),
+            generation: gen,
+            savedAt: new Date().toISOString()
+        };
+        const json = JSON.stringify(data, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const filename = 'jumpking_brain_gen_' + gen + '_moves_' + brain.instructions.length + '.json';
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        console.log('Brain file created: ' + filename);
+    }
+
     static loadBestBrain() {
         const saved = localStorage.getItem('jumpKingBestBrain');
         if (saved) {
@@ -144,6 +165,22 @@ class Brain {
             return { brain: Brain.fromJSON(data.brain), generation: data.generation };
         }
         return null;
+    }
+
+    // Read a Brain file (drag-and-drop or file input) and return a deserialized object
+    static async loadBestBrainFromFile(file) {
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+            // support both { brain: ... } and bare brain json structure
+            const brainData = data.brain ? data.brain : data;
+            const generation = data.generation || 0;
+            const brain = Brain.fromJSON(brainData);
+            return { brain, generation };
+        } catch (err) {
+            console.error('Failed to parse brain file:', err);
+            return null;
+        }
     }
 
 }

@@ -39,6 +39,12 @@ Set `testingSinglePlayer = false` in sketch.js
 - Press "2" to load a saved brain
 - Press "B" to replay the best player
 - Up/Down arrows to adjust evolution speed
+ - Press "1" to download the best AI brain as a JSON file (also stored to localStorage as backup)
+ - Drag the downloaded brain JSON onto the canvas or double-click the canvas to import it
+ - Press "P" to toggle checkpoint progression (start new generations from last-unlocked level)
+ - Press "P" to toggle checkpoint progression (start new generations from last-unlocked level)
+ - The carry-action behavior is always enabled; new generations that begin at a checkpoint inherit the parent's instruction index at the moment the checkpoint was saved.
+ - Press "K" to immediately reapply the saved checkpoint to all currently running players (good for testing).
 
 ## Controls Summary
 - Player 1: Arrow keys (Left/Right movement), Space (jump)

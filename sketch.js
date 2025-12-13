@@ -29,6 +29,7 @@ let placingCoins = false;
 let playerPlaced = false;
 
 let testingSinglePlayer = false;
+let enableCheckpointMode = true; // when true, new populations start from the best reached level
 
 
 let fallSound = null;
@@ -90,6 +91,7 @@ function setup() {
     landSound.playMode('sustain');
     
     loadMultiplayerProgress();
+    setupFileDrop();
 }
 
 function drawMousePosition() {
@@ -198,6 +200,16 @@ function draw() {
         text('Gen: ' + population.gen, 30, 35);
         text('Moves: ' + population.players[0].brain.instructions.length, 200, 35);
         text('Best: ' + population.bestHeight, 400, 35);
+        text('Checkpoint: ' + (enableCheckpointMode ? 'ON' : 'OFF'), 560, 35);
+        // Carry actions removed — always carry parent's action number when resuming at checkpoint
+        text('Checkpoint Level: ' + population.currentBestLevelReached, 980, 35);
+        if (population.newLevelReached) {
+            fill(255, 220, 0);
+            textSize(20);
+            text('NEW CHECKPOINT REACHED!', 30, 70);
+            textSize(32);
+            fill(255);
+        }
     }
 
 
@@ -232,6 +244,67 @@ function setupCanvas() {
     canvas.parent('canvas');
     width = canvas.width;
     height = canvas.height - 50;
+}
+
+// Provide a simple drag-and-drop and file input to import a saved brain file
+function setupFileDrop() {
+    const div = document.getElementById('canvas');
+    if (!div) return;
+
+    // Prevent default browser behavior for dragover/drop
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evtName => {
+        div.addEventListener(evtName, function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }, false);
+    });
+
+    div.addEventListener('dragover', (e) => {
+        e.dataTransfer.dropEffect = 'copy';
+    });
+
+    div.addEventListener('drop', async (e) => {
+        const files = e.dataTransfer.files;
+        if (!files || files.length === 0) return;
+        const file = files[0];
+        const loaded = await Brain.loadBestBrainFromFile(file);
+        if (!loaded) {
+            alert('Not a valid brain file');
+            return;
+        }
+        // Load into current population
+        for (let i = 0; i < population.players.length; i++) {
+            population.players[i].brain = loaded.brain.clone();
+            population.players[i].brain.mutate();
+        }
+        population.gen = loaded.generation || population.gen;
+        alert('Brain file loaded! Generation: ' + loaded.generation);
+    });
+
+    // Hidden input to fallback to manual file selection
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    input.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const loaded = await Brain.loadBestBrainFromFile(file);
+        if (!loaded) {
+            alert('Not a valid brain file');
+            return;
+        }
+        for (let i = 0; i < population.players.length; i++) {
+            population.players[i].brain = loaded.brain.clone();
+            population.players[i].brain.mutate();
+        }
+        population.gen = loaded.generation || population.gen;
+        alert('Brain file loaded! Generation: ' + loaded.generation);
+    });
+
+    // small UI: click the canvas to pick a file
+    div.addEventListener('dblclick', () => input.click());
 }
 
 
@@ -292,8 +365,11 @@ function keyReleased() {
             break;
         case '1':
             if (population.cloneOfBestPlayerFromPreviousGeneration) {
+                // Save to localStorage as a backup
                 Brain.saveBestBrain(population.cloneOfBestPlayerFromPreviousGeneration.brain, population.gen);
-                alert('Brain saved! Generation: ' + population.gen);
+                // Also download a file that can be dragged back into the page
+                Brain.saveBestBrainToFile(population.cloneOfBestPlayerFromPreviousGeneration.brain, population.gen);
+                alert('Brain saved to file and localStorage. Generation: ' + population.gen);
             }
             break;
         case '2':
@@ -307,6 +383,27 @@ function keyReleased() {
                 alert('Brain loaded! Generation: ' + loaded.generation);
             } else {
                 alert('No saved brain found!');
+            }
+            break;
+        case 'P':
+            // Toggle checkpoint progression on/off
+            enableCheckpointMode = !enableCheckpointMode;
+            alert('Checkpoint progression: ' + (enableCheckpointMode ? 'ON' : 'OFF'));
+            break;
+        // 'O' removed — carry actions always enabled
+        case 'K':
+            if (population && population.checkpointState) {
+                for (let i = 0; i < population.players.length; i++) {
+                    population.players[i].playerStateAtStartOfBestLevel = population.checkpointState.clone();
+                    population.players[i].loadStartOfBestLevelPlayerState();
+                    // Always carry the parent's action number
+                    if (population.checkpointState.brainActionNumber !== undefined) {
+                        population.players[i].brain.currentInstructionNumber = population.checkpointState.brainActionNumber;
+                    }
+                }
+                alert('Checkpoint reapplied to all players');
+            } else {
+                alert('No checkpoint saved');
             }
             break;
 

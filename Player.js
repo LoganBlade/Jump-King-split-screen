@@ -1290,7 +1290,10 @@ class Player {
                 this.bestLevelReached = this.currentLevelNo;
                 this.bestLevelReachedOnActionNo = this.brain.currentInstructionNumber;
                 // this.playerStateAtStartOfBestLevel.getStateFromPlayer(this);
-                this.getNewPlayerStateAtEndOfUpdate = true;
+                // Only capture a checkpoint state when checkpoint mode is enabled
+                if (typeof enableCheckpointMode === 'undefined' || enableCheckpointMode) {
+                    this.getNewPlayerStateAtEndOfUpdate = true;
+                }
 
 
                 //setup coins

@@ -24,6 +24,7 @@ class Population {
         this.reachedBestLevelAtActionNo = 0;
         this.newLevelReached = false;
         this.cloneOfBestPlayerFromPreviousGeneration = this.players[0].clone();
+        this.checkpointState = null; // PlayerState snapshot for the current best level checkpoint
     }
 
     Update() {
@@ -53,6 +54,16 @@ class Population {
             this.newLevelReached = true;
             this.reachedBestLevelAtActionNo = this.players[this.bestPlayerIndex].bestLevelReachedOnActionNo;
             print("NEW LEVEL, action number", this.reachedBestLevelAtActionNo)
+            console.log('Checkpoint saved: level ' + this.currentBestLevelReached + ' at action ' + this.reachedBestLevelAtActionNo);
+            // Save a checkpoint state from the player's saved start-of-best-level state (if present)
+            if (this.players[this.bestPlayerIndex].playerStateAtStartOfBestLevel) {
+                this.checkpointState = this.players[this.bestPlayerIndex].playerStateAtStartOfBestLevel.clone();
+            } else {
+                // Fallback: capture current player state
+                let tempState = new PlayerState();
+                tempState.getStateFromPlayer(this.players[this.bestPlayerIndex]);
+                this.checkpointState = tempState;
+            }
         }
         this.bestHeight = this.players[this.bestPlayerIndex].bestHeightReached;
     }
@@ -117,6 +128,16 @@ class Population {
 
         this.cloneOfBestPlayerFromPreviousGeneration = this.players[this.bestPlayerIndex].clone();
 
+        // Choose checkpoint state if available and checkpoint mode enabled
+        let bestStartState = null;
+        if (typeof enableCheckpointMode !== 'undefined' && enableCheckpointMode && this.newLevelReached && this.currentBestLevelReached !== 0) {
+            if (this.checkpointState) {
+                bestStartState = this.checkpointState.clone();
+            } else if (this.cloneOfBestPlayerFromPreviousGeneration && this.cloneOfBestPlayerFromPreviousGeneration.playerStateAtStartOfBestLevel) {
+                bestStartState = this.cloneOfBestPlayerFromPreviousGeneration.playerStateAtStartOfBestLevel.clone();
+            }
+        }
+
         nextGen.push(this.players[this.bestPlayerIndex].clone());
         for (let i = 1; i < this.players.length; i++) {
             let parent = this.SelectParent();
@@ -132,12 +153,24 @@ class Population {
         this.players = [];
         for (let i = 0; i < nextGen.length; i++) {
             this.players[i] = nextGen[i];
-            // if(!this.newLevelReached && this.currentBestLevelReached !== 0){// && this.currentBestLevelReached !== 37){
-            //     this.players[i].loadStartOfBestLevelPlayerState();
-            // }<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+            // If checkpoint mode is on and we captured a best start state, set it for every player
+            if (bestStartState) {
+                this.players[i].playerStateAtStartOfBestLevel = bestStartState.clone();
+                this.players[i].loadStartOfBestLevelPlayerState();
+                // Set brain action number depending on checkpoint carry setting
+                // Always carry the parent's action number when resuming at a checkpoint
+                if (bestStartState.brainActionNumber !== undefined) {
+                    this.players[i].brain.currentInstructionNumber = bestStartState.brainActionNumber;
+                }
+            }
         }
 
         this.gen++;
+        if (bestStartState) {
+            console.log('Applied checkpoint to next generation, level: ' + this.currentBestLevelReached);
+        }
+        // Reset new level flag to stop flashing the HUD next frame
+        this.newLevelReached = false;
     }
 
     CalculateFitnessSum() {
