@@ -1249,7 +1249,12 @@ class Player {
         //if the action hasnt started yet then start it
         //also if the ai is not on the ground and the action has already started then end the action
         if (this.isOnGround && !this.actionStarted) {
-            this.currentAction = this.brain.getNextAction();
+            // Use PPO-compatible API: pass the player state so the brain can sample
+            if (this.brain && typeof this.brain.getNextActionForPlayer === 'function') {
+                this.currentAction = this.brain.getNextActionForPlayer(this);
+            } else {
+                this.currentAction = this.brain.getNextAction();
+            }
             if (this.currentAction === null) {
                 this.hasFinishedInstructions = true;
                 return;

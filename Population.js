@@ -145,11 +145,66 @@ class Population {
     }
 
     NaturalSelection() {
-        let nextGen = [];
+        // PPO branch: if brains are PPO-compatible then perform a PPO-style
+        // training step instead of a genetic reproduction step.
         this.SetBestPlayer();
         this.CalculateFitnessSum();
-
         this.cloneOfBestPlayerFromPreviousGeneration = this.players[this.bestPlayerIndex].clone();
+
+        // If first player's brain indicates PPO, run a simpler PPO training flow
+        if (this.players.length > 0 && this.players[0].brain && this.players[0].brain.type === 'PPO') {
+            // Aggregate buffers from all players and compute simple returns/advantages
+            let aggregated = [];
+            for (let i = 0; i < this.players.length; i++) {
+                let p = this.players[i];
+                try { p.CalculateFitness(); } catch (e) {}
+                const finalReward = p.fitness || 0;
+                if (p.brain && p.brain.buffer && p.brain.buffer.length > 0) {
+                    for (let bufItem of p.brain.buffer) {
+                        // naive assignment: use final fitness as return for every step
+                        aggregated.push({
+                            obs: bufItem.obs,
+                            action: bufItem.action,
+                            logp: bufItem.logp,
+                            value: bufItem.value,
+                            return: finalReward,
+                            adv: finalReward - (bufItem.value || 0)
+                        });
+                    }
+                }
+                // clear player's buffer
+                if (p.brain && p.brain.buffer) p.brain.buffer = [];
+            }
+
+            // train using the best player's brain as the trainer (in-place update)
+            const trainerBrain = this.players[this.bestPlayerIndex].brain;
+            try {
+                trainerBrain.trainOnAggregatedBuffer(aggregated, { epochs: 6, batchSize: 64, clipRatio: 0.2 }).then(() => {
+                    // after training, clone trained weights to all players
+                    const trainedClone = trainerBrain.clone();
+                    for (let i = 0; i < this.players.length; i++) {
+                        this.players[i].brain = trainedClone.clone();
+                        this.players[i].ResetPlayer();
+                        if (this.checkpointState) {
+                            this.players[i].playerStateAtStartOfBestLevel = this.checkpointState.clone();
+                            this.players[i].loadStartOfBestLevelPlayerState();
+                            if (this.checkpointState.brainActionNumber !== undefined) {
+                                this.players[i].brain.currentInstructionNumber = this.checkpointState.brainActionNumber;
+                            }
+                        }
+                    }
+                }).catch(e => console.error('PPO training failed', e));
+            } catch (e) {
+                console.error('PPO training error', e);
+            }
+
+            this.gen++;
+            this.newLevelReached = false;
+            return;
+        }
+
+        // --- Original GA-style reproduction flow for non-PPO brains ---
+        let nextGen = [];
 
         // Choose checkpoint state if available and checkpoint mode enabled.
         // Apply the checkpoint if it exists at all; also fallback to cloneOfBestPlayer when a new level was just reached.
