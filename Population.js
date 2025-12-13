@@ -79,6 +79,10 @@ class Population {
                     this.checkpointState = tempState;
                 }
                 // No local persistence for checkpoints; file-based only
+                // Auto-save snapshot when a new level is reached if configured
+                if (typeof autoSaveSnapshotsOnNewLevel !== 'undefined' && autoSaveSnapshotsOnNewLevel) {
+                    this.saveSnapshotToFile();
+                }
             } else {
                 // Not enough players yet — candidate not unlocked (but track count)
                 console.log('Candidate level ' + candidateLevel + ' reached by ' + count + ' players; need ' + this.requiredSuccessfulPlayersForLevel);
