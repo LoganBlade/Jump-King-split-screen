@@ -1,6 +1,7 @@
 let width = 0;
 let height = 0;
 let canvas = null;
+let lastRuntimeError = null;
 
 let player = null;
 let player2 = null;
@@ -30,6 +31,8 @@ let playerPlaced = false;
 
 let testingSinglePlayer = false;
 let enableCheckpointMode = true; // when true, new populations start from the best reached level
+// Auto-load last local save on startup? Keep disabled to avoid unexpectedly restoring saves.
+let autoLoadLocalSaves = false;
 
 
 let fallSound = null;
@@ -79,13 +82,23 @@ function preload() {
 
 }
 
+// Global error handlers so runtime errors are visible on the canvas
+window.addEventListener('error', (e) => {
+    console.error('Runtime error caught:', e.error || e.message || e);
+    lastRuntimeError = e.error || new Error(e.message || String(e));
+});
+window.addEventListener('unhandledrejection', (e) => {
+    console.error('Unhandled promise rejection:', e.reason);
+    lastRuntimeError = e.reason instanceof Error ? e.reason : new Error(String(e.reason));
+});
+
 
 function setup() {
     setupCanvas();
     player = new Player();
     player2 = new Player();
     player2.currentPos = createVector(width / 2 + 100, height - 200);
-    population = new Population(600);
+    population = new Population(100);
     setupLevels();
     jumpSound.playMode('sustain');
     fallSound.playMode('sustain');
@@ -94,8 +107,8 @@ function setup() {
     
     loadMultiplayerProgress();
     setupFileDrop();
-    // Attempt to auto-restore the last saved slot (if any)
-    tryLoadLastSlot();
+    // Attempt to auto-restore the last saved slot (if any) only when explicitly enabled
+    if (autoLoadLocalSaves) tryLoadLastSlot();
     frameRate(60); // cap draw frames to 60fps target
 }
 
@@ -121,6 +134,18 @@ function drawMousePosition() {
 let levelNumber = 0;
 
 function draw() {
+    // If a runtime error happened, show it on-screen so user can see the message
+    if (lastRuntimeError) {
+        background(30, 0, 0);
+        fill(255, 200, 200);
+        textSize(18);
+        textAlign(CENTER, TOP);
+        text('Runtime error: ' + (lastRuntimeError.message || String(lastRuntimeError)), width/2, 20);
+        textSize(12);
+        text('Open developer console for full stack trace. Reload to try again.', width/2, 60);
+        return;
+    }
+
     background(10);
 
 

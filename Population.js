@@ -145,6 +145,7 @@ class Population {
     }
 
     NaturalSelection() {
+        console.log('NaturalSelection called; gen=', this.gen, 'bestPlayerIndex=', this.bestPlayerIndex);
         // PPO branch: if brains are PPO-compatible then perform a PPO-style
         // training step instead of a genetic reproduction step.
         this.SetBestPlayer();
@@ -153,51 +154,112 @@ class Population {
 
         // If first player's brain indicates PPO, run a simpler PPO training flow
         if (this.players.length > 0 && this.players[0].brain && this.players[0].brain.type === 'PPO') {
-            // Aggregate buffers from all players and compute simple returns/advantages
+            // Aggregate buffers from all players and compute GAE (discounted returns + lambda)
+            const gamma = 0.99;
+            const lambda = 0.95;
             let aggregated = [];
             for (let i = 0; i < this.players.length; i++) {
                 let p = this.players[i];
                 try { p.CalculateFitness(); } catch (e) {}
                 const finalReward = p.fitness || 0;
-                if (p.brain && p.brain.buffer && p.brain.buffer.length > 0) {
-                    for (let bufItem of p.brain.buffer) {
-                        // naive assignment: use final fitness as return for every step
-                        aggregated.push({
-                            obs: bufItem.obs,
-                            action: bufItem.action,
-                            logp: bufItem.logp,
-                            value: bufItem.value,
-                            return: finalReward,
-                            adv: finalReward - (bufItem.value || 0)
-                        });
-                    }
+                if (!(p.brain && p.brain.buffer && p.brain.buffer.length > 0)) {
+                    if (p.brain) p.brain.buffer = [];
+                    continue;
                 }
-                // clear player's buffer
-                if (p.brain && p.brain.buffer) p.brain.buffer = [];
+
+                const buf = p.brain.buffer;
+                const n = buf.length;
+                // build arrays of baseFitness and values
+                const baseFits = buf.map(b => b.baseFitness || 0);
+                const values = buf.map(b => b.value || 0);
+                // compute per-step rewards as fitness deltas between consecutive steps
+                const rewards = new Array(n).fill(0);
+                for (let t = 0; t < n - 1; t++) {
+                    rewards[t] = (baseFits[t + 1] || 0) - (baseFits[t] || 0);
+                }
+                // last step reward = final fitness - baseFitness of last step
+                rewards[n - 1] = finalReward - (baseFits[n - 1] || 0);
+
+                // compute deltas and advantages (GAE)
+                const deltas = new Array(n).fill(0);
+                for (let t = 0; t < n; t++) {
+                    const v = values[t] || 0;
+                    const vNext = (t + 1 < n) ? (values[t + 1] || 0) : 0;
+                    deltas[t] = rewards[t] + gamma * vNext - v;
+                }
+                const advs = new Array(n).fill(0);
+                let lastAdv = 0;
+                for (let t = n - 1; t >= 0; t--) {
+                    lastAdv = deltas[t] + gamma * lambda * lastAdv;
+                    advs[t] = lastAdv;
+                }
+
+                // returns = advantages + values
+                for (let t = 0; t < n; t++) {
+                    aggregated.push({
+                        obs: buf[t].obs,
+                        action: buf[t].action,
+                        logp: buf[t].logp,
+                        value: buf[t].value,
+                        return: advs[t] + (values[t] || 0),
+                        adv: advs[t]
+                    });
+                }
+
+                // clear buffer
+                p.brain.buffer = [];
             }
 
             // train using the best player's brain as the trainer (in-place update)
             const trainerBrain = this.players[this.bestPlayerIndex].brain;
             try {
-                trainerBrain.trainOnAggregatedBuffer(aggregated, { epochs: 6, batchSize: 64, clipRatio: 0.2 }).then(() => {
-                    // after training, clone trained weights to all players
-                    const trainedClone = trainerBrain.clone();
-                    for (let i = 0; i < this.players.length; i++) {
-                        this.players[i].brain = trainedClone.clone();
-                        this.players[i].ResetPlayer();
-                        if (this.checkpointState) {
-                            this.players[i].playerStateAtStartOfBestLevel = this.checkpointState.clone();
-                            this.players[i].loadStartOfBestLevelPlayerState();
-                            if (this.checkpointState.brainActionNumber !== undefined) {
-                                this.players[i].brain.currentInstructionNumber = this.checkpointState.brainActionNumber;
-                            }
+                // Immediately reset all players and give them a copy of the current trainer brain
+                for (let i = 0; i < this.players.length; i++) {
+                    try {
+                        this.players[i].brain = trainerBrain.clone();
+                    } catch (e) {
+                        // fallback: leave existing brain
+                    }
+                    this.players[i].ResetPlayer();
+                    if (this.checkpointState) {
+                        this.players[i].playerStateAtStartOfBestLevel = this.checkpointState.clone();
+                        this.players[i].loadStartOfBestLevelPlayerState();
+                        if (this.checkpointState.brainActionNumber !== undefined) {
+                            this.players[i].brain.currentInstructionNumber = this.checkpointState.brainActionNumber;
                         }
                     }
+                }
+
+                // Start async training; when it finishes copy updated weights into each player's models
+                trainerBrain.trainOnAggregatedBuffer(aggregated, { epochs: 3, batchSize: 32, clipRatio: 0.2, policyLr: 1e-4, valueLr: 1e-3, entropyCoef: 1e-3, gamma: 0.99, lambda: 0.95 }).then(() => {
+                    for (let i = 0; i < this.players.length; i++) {
+                        try {
+                            if (typeof copyModelWeights === 'function' && trainerBrain.policyModel && this.players[i].brain && this.players[i].brain.policyModel) {
+                                copyModelWeights(trainerBrain.policyModel, this.players[i].brain.policyModel);
+                            }
+                            if (typeof copyModelWeights === 'function' && trainerBrain.valueModel && this.players[i].brain && this.players[i].brain.valueModel) {
+                                copyModelWeights(trainerBrain.valueModel, this.players[i].brain.valueModel);
+                            }
+                        } catch (e) {
+                            // ignore individual copy errors
+                        }
+                    }
+                    console.log('PPO training complete; weights updated for generation', this.gen);
                 }).catch(e => console.error('PPO training failed', e));
             } catch (e) {
                 console.error('PPO training error', e);
             }
-
+            // Generation completed — apply scheduled move increases at gen boundaries (original behaviour)
+            if (this.gen % 10 === 0) {
+                // every 10 generations increase available moves by 5
+                this.IncreasePlayerMoves(5);
+                console.log('Increased player moves by 5 at generation', this.gen);
+                try {
+                    if (this.players && this.players[0] && this.players[0].brain && this.players[0].brain.instructions) {
+                        console.log('First player brain instructions length now', this.players[0].brain.instructions.length);
+                    }
+                } catch (e) {}
+            }
             this.gen++;
             this.newLevelReached = false;
             return;
@@ -232,11 +294,12 @@ class Population {
         this.players = [];
         for (let i = 0; i < nextGen.length; i++) {
             this.players[i] = nextGen[i];
+            // Reset the player's runtime state so they start fresh (match original GA behaviour)
+            try { this.players[i].ResetPlayer(); } catch (e) {}
             // If checkpoint mode is on and we captured a best start state, set it for every player
             if (bestStartState) {
                 this.players[i].playerStateAtStartOfBestLevel = bestStartState.clone();
                 this.players[i].loadStartOfBestLevelPlayerState();
-                // Set brain action number depending on checkpoint carry setting
                 // Always carry the parent's action number when resuming at a checkpoint
                 if (bestStartState.brainActionNumber !== undefined) {
                     this.players[i].brain.currentInstructionNumber = bestStartState.brainActionNumber;
@@ -244,6 +307,16 @@ class Population {
             }
         }
 
+        // Generation completed — apply scheduled move increases at gen boundaries (original behaviour)
+        if (this.gen % 10 === 0) {
+            this.IncreasePlayerMoves(5);
+            console.log('Increased player moves by 5 at generation', this.gen);
+            try {
+                if (this.players && this.players[0] && this.players[0].brain && this.players[0].brain.instructions) {
+                    console.log('First player brain instructions length now', this.players[0].brain.instructions.length);
+                }
+            } catch (e) {}
+        }
         this.gen++;
         if (bestStartState) {
             console.log('Applied checkpoint to next generation, level: ' + this.currentBestLevelReached);
