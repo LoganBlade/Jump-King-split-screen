@@ -47,6 +47,7 @@ Set `testingSinglePlayer = false` in sketch.js
  - The carry-action behavior is always enabled; new generations that begin at a checkpoint inherit the parent's instruction index at the moment the checkpoint was saved.
  - Press "K" to immediately reapply the saved checkpoint to all currently running players (good for testing). Note: 'K' will not create a new checkpoint; checkpoints must be created by the population when enough AIs reach a level, or loaded from a checkpoint file.
  - Press "3" to download the currently held checkpoint as a JSON file
+ - Press "3" to download a snapshot (brain + checkpoint + generation) so you can reload the exact state later
 
 New behavior: A level only becomes a checkpoint once at least 5 AIs have reached it in the same generation. This prevents checkpoints from being created by a single lucky AI.
 
@@ -58,6 +59,8 @@ New behavior: A level only becomes a checkpoint once at least 5 AIs have reached
 - **1:** Save the best AI brain to a downloadable JSON file (AI mode)
 - **2:** Open the file picker to import a brain or checkpoint JSON file (or drag/drop/double-click canvas)
 - **P:** Toggle checkpoint progression mode (start new generations from last-unlocked level)
+ - **3:** Save a snapshot (brain + checkpoint) representing the current population state
+ - **L:** Toggle auto-snapshot-on-new-level behavior (when enabled, pressing a key is not needed; snapshot is downloaded automatically on new level)
 - **R:** Reset players when not in line-creation mode; when creating lines, clears current level lines being drawn
 - **N:** When creating lines, create a new level; otherwise, increment current player's level (debug)
 - **D:** Cancels current line placement while creating lines
