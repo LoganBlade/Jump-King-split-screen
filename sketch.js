@@ -213,6 +213,7 @@ function draw() {
         text('Best: ' + population.bestHeight, 400, 35);
         // Show rendering quality and number of players being drawn
         text('Render: ' + renderQuality, 600, 35);
+        text('Drawn: ' + (window.lastVisiblePlayersRendered || 0), 760, 35);
         // Success HUD removed per user request; hide candidate success count
         // Checkpoint HUD removed per user request
         // Carry actions removed — always carry parent's action number when resuming at checkpoint

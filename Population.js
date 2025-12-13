@@ -135,6 +135,7 @@ class Population {
             visiblePlayers = visiblePlayers.slice(0, maxToDraw);
         }
         // Finally show the selected set
+        try { window.lastVisiblePlayersRendered = visiblePlayers.length; } catch(e) {}
         for (let p of visiblePlayers) {
             p.Show();
         }
