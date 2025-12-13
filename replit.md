@@ -70,3 +70,4 @@ New behavior: A level only becomes a checkpoint once at least 5 AIs have reached
 - **0:** Reset evolution speed to 1
 - **9:** Set evolution speed to 10
 - **8:** Set evolution speed to 50 (max)
+ - **Q:** Cycle render quality (low/medium/high) - lowers the number of players drawn to improve FPS
