@@ -1,6 +1,7 @@
 let width = 0;
 let height = 0;
 let canvas = null;
+let lastRuntimeError = null;
 
 let player = null;
 let player2 = null;
@@ -30,6 +31,8 @@ let playerPlaced = false;
 
 let testingSinglePlayer = false;
 let enableCheckpointMode = true; // when true, new populations start from the best reached level
+// Auto-load last local save on startup? Keep disabled to avoid unexpectedly restoring saves.
+let autoLoadLocalSaves = false;
 
 
 let fallSound = null;
@@ -79,13 +82,23 @@ function preload() {
 
 }
 
+// Global error handlers so runtime errors are visible on the canvas
+window.addEventListener('error', (e) => {
+    console.error('Runtime error caught:', e.error || e.message || e);
+    lastRuntimeError = e.error || new Error(e.message || String(e));
+});
+window.addEventListener('unhandledrejection', (e) => {
+    console.error('Unhandled promise rejection:', e.reason);
+    lastRuntimeError = e.reason instanceof Error ? e.reason : new Error(String(e.reason));
+});
+
 
 function setup() {
     setupCanvas();
     player = new Player();
     player2 = new Player();
     player2.currentPos = createVector(width / 2 + 100, height - 200);
-    population = new Population(600);
+    population = new Population(100);
     setupLevels();
     jumpSound.playMode('sustain');
     fallSound.playMode('sustain');
@@ -94,6 +107,8 @@ function setup() {
     
     loadMultiplayerProgress();
     setupFileDrop();
+    // Attempt to auto-restore the last saved slot (if any) only when explicitly enabled
+    if (autoLoadLocalSaves) tryLoadLastSlot();
     frameRate(60); // cap draw frames to 60fps target
 }
 
@@ -119,6 +134,18 @@ function drawMousePosition() {
 let levelNumber = 0;
 
 function draw() {
+    // If a runtime error happened, show it on-screen so user can see the message
+    if (lastRuntimeError) {
+        background(30, 0, 0);
+        fill(255, 200, 200);
+        textSize(18);
+        textAlign(CENTER, TOP);
+        text('Runtime error: ' + (lastRuntimeError.message || String(lastRuntimeError)), width/2, 20);
+        textSize(12);
+        text('Open developer console for full stack trace. Reload to try again.', width/2, 60);
+        return;
+    }
+
     background(10);
 
 
@@ -430,45 +457,28 @@ function keyReleased() {
             mutePlayers = false;
             break;
         case '1':
-            if (population.cloneOfBestPlayerFromPreviousGeneration) {
-                // Only save to file (localStorage disabled)
-                Brain.saveBestBrainToFile(population.cloneOfBestPlayerFromPreviousGeneration.brain, population.gen);
-                alert('Brain saved to file. Generation: ' + population.gen);
-            }
+            // Save to local slot 1 and download backup
+            saveToLocalSlot(1);
             break;
         case '2':
-            // Open file picker to import a brain or checkpoint
-            if (filePickerInput) {
-                filePickerInput.click();
-            } else {
-                alert('File picker not available');
-            }
+            // Save to local slot 2 and download backup
+            saveToLocalSlot(2);
             break;
         case '3':
-            // Save snapshot (brain+checkpoint) to file (generate checkpoint if not present)
-            if (!population.checkpointState) {
-                // Try to use the cloneOfBestPlayer checkpoint state if available
-                if (population.cloneOfBestPlayerFromPreviousGeneration && population.cloneOfBestPlayerFromPreviousGeneration.playerStateAtStartOfBestLevel) {
-                    population.checkpointState = population.cloneOfBestPlayerFromPreviousGeneration.playerStateAtStartOfBestLevel.clone();
-                    population.currentBestLevelReached = population.cloneOfBestPlayerFromPreviousGeneration.bestLevelReached || population.currentBestLevelReached;
-                } else if (population.players && population.players[population.bestPlayerIndex] && population.players[population.bestPlayerIndex].playerStateAtStartOfBestLevel) {
-                    population.checkpointState = population.players[population.bestPlayerIndex].playerStateAtStartOfBestLevel.clone();
-                    population.currentBestLevelReached = population.players[population.bestPlayerIndex].bestLevelReached || population.currentBestLevelReached;
-                } else if (population.players && population.players.length > 0) {
-                    // Fallback: capture current state from the best player or first player
-                    let p = population.players[population.bestPlayerIndex] || population.players[0];
-                    let tempState = new PlayerState();
-                    tempState.getStateFromPlayer(p);
-                    population.checkpointState = tempState;
-                    population.currentBestLevelReached = tempState.bestLevelReached || population.currentBestLevelReached;
-                }
-            }
-            if (population.checkpointState) {
-                population.saveSnapshotToFile();
-                alert('Snapshot saved to file! Level: ' + population.currentBestLevelReached + ' Generation: ' + population.gen);
-            } else {
-                alert('No checkpoint available to save');
-            }
+            // Save snapshot (checkpoint + brain) to slot 3
+            saveToLocalSlot(3);
+            break;
+        case '!':
+            // Shift+1 -> load slot 1
+            loadFromLocalSlot(1);
+            break;
+        case '@':
+            // Shift+2 -> load slot 2
+            loadFromLocalSlot(2);
+            break;
+        case '#':
+            // Shift+3 -> load slot 3
+            loadFromLocalSlot(3);
             break;
         case 'P':
             // Toggle checkpoint progression on/off
@@ -480,14 +490,10 @@ function keyReleased() {
             window.autoSaveSnapshotsOnNewLevel = !window.autoSaveSnapshotsOnNewLevel;
             alert('Auto snapshot on new level: ' + (window.autoSaveSnapshotsOnNewLevel ? 'ON' : 'OFF'));
             break;
-        
         // 'O' removed — carry actions always enabled
         case 'K':
             // K key intentionally does nothing now — reserved for future UI features
             break;
-            break;
-
-
         case ' ':
             if (!creatingLines) {
                 player.jumpHeld = false
@@ -502,10 +508,6 @@ function keyReleased() {
         case 'D':
             if (multiplayerMode) player2.rightHeld = false;
             break;
-        case 'A':
-            if (multiplayerMode) player2.leftHeld = false;
-            break;
-        
         case 'N':
             if (creatingLines) {
                 levelNumber += 1;
@@ -521,7 +523,6 @@ function keyReleased() {
                 print(player.currentLevelNo);
             }
             break;
-        
     }
 
     switch (keyCode) {
@@ -591,6 +592,100 @@ function mouseClicked() {
 
     }
     print("levels[" + player.currentLevelNo + "].coins.push(new Coin( " + floor(mouseX) + "," + floor(mouseY - 50) + ' , "progress" ));');
+}
+
+// Save current snapshot (checkpoint + brain) to a numbered localStorage slot
+function saveToLocalSlot(slotNumber) {
+    if (!population) return;
+    // ensure checkpoint exists
+    if (!population.checkpointState) {
+        if (population.cloneOfBestPlayerFromPreviousGeneration && population.cloneOfBestPlayerFromPreviousGeneration.playerStateAtStartOfBestLevel) {
+            population.checkpointState = population.cloneOfBestPlayerFromPreviousGeneration.playerStateAtStartOfBestLevel.clone();
+            population.currentBestLevelReached = population.cloneOfBestPlayerFromPreviousGeneration.bestLevelReached || population.currentBestLevelReached;
+        } else if (population.players && population.players[population.bestPlayerIndex] && population.players[population.bestPlayerIndex].playerStateAtStartOfBestLevel) {
+            population.checkpointState = population.players[population.bestPlayerIndex].playerStateAtStartOfBestLevel.clone();
+            population.currentBestLevelReached = population.players[population.bestPlayerIndex].bestLevelReached || population.currentBestLevelReached;
+        } else if (population.players && population.players.length > 0) {
+            let p = population.players[population.bestPlayerIndex] || population.players[0];
+            let tempState = new PlayerState();
+            tempState.getStateFromPlayer(p);
+            population.checkpointState = tempState;
+            population.currentBestLevelReached = tempState.bestLevelReached || population.currentBestLevelReached;
+        }
+    }
+
+    // choose brain to save
+    let brainToSave = null;
+    if (population.players && population.players.length > 0 && population.players[population.bestPlayerIndex]) {
+        brainToSave = population.players[population.bestPlayerIndex].brain;
+    } else if (population.cloneOfBestPlayerFromPreviousGeneration) {
+        brainToSave = population.cloneOfBestPlayerFromPreviousGeneration.brain;
+    }
+
+    const obj = {
+        type: 'snapshot',
+        generation: population.gen,
+        level: population.currentBestLevelReached,
+        checkpoint: population.checkpointState ? population.checkpointState.toJSON() : null,
+        brain: brainToSave ? brainToSave.toJSON() : null,
+        savedAt: new Date().toISOString()
+    };
+
+    try {
+        localStorage.setItem('jumpking_slot' + slotNumber, JSON.stringify(obj));
+        localStorage.setItem('jumpking_last_slot', slotNumber.toString());
+        // also create a downloadable file as backup
+        const json = JSON.stringify(obj, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const filename = 'jumpking_slot' + slotNumber + '_gen_' + population.gen + '.json';
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        alert('Saved to slot ' + slotNumber + ' (Generation: ' + population.gen + ')');
+    } catch (e) {
+        console.error('Failed to save to local slot', e);
+        alert('Failed to save to slot ' + slotNumber);
+    }
+}
+
+// Load snapshot from a numbered localStorage slot
+async function loadFromLocalSlot(slotNumber) {
+    try {
+        const str = localStorage.getItem('jumpking_slot' + slotNumber);
+        if (!str) { alert('No save in slot ' + slotNumber); return; }
+        const data = JSON.parse(str);
+        const applied = population.applySnapshotData(data);
+        if (applied) {
+            alert('Loaded slot ' + slotNumber + ' Level: ' + applied.level + ' Gen: ' + applied.generation);
+        } else {
+            alert('Failed to apply slot ' + slotNumber);
+        }
+    } catch (e) {
+        console.error('Failed to load slot', e);
+        alert('Failed to load slot ' + slotNumber);
+    }
+}
+
+// Try to auto-load the last saved slot on startup
+function tryLoadLastSlot() {
+    try {
+        const last = localStorage.getItem('jumpking_last_slot');
+        if (!last) return;
+        const num = parseInt(last);
+        if (!isNaN(num)) {
+            const str = localStorage.getItem('jumpking_slot' + num);
+            if (str) {
+                const data = JSON.parse(str);
+                population.applySnapshotData(data);
+                console.log('Auto-loaded slot ' + num);
+            }
+        }
+    } catch (e) { console.error('Auto-load failed', e); }
 }
 
 //todo
