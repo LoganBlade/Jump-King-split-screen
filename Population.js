@@ -319,6 +319,8 @@ class Population {
                 }
             }
             console.log('Snapshot applied: level ' + this.currentBestLevelReached + ' generation ' + this.gen);
+            // Recompute best player after applying snapshot
+            try { this.SetBestPlayer(); } catch (e) {}
             return { generation: this.gen, level: this.currentBestLevelReached };
         } catch (e) {
             console.error('Failed to apply snapshot data', e);
