@@ -381,9 +381,6 @@ function keyPressed() {
         case ' ':
             player.jumpHeld = true
             break;
-        case 'R':
-            population.ResetAllPlayers()
-            break;
         case 'S':
             bumpSound.stop();
             jumpSound.stop();
@@ -398,10 +395,7 @@ function keyPressed() {
         case 'A':
             if (multiplayerMode) player2.leftHeld = true;
             break;
-        case 'd':
-        case 'D':
-            if (multiplayerMode) player2.rightHeld = true;
-            break;
+        
     }
 
     switch (keyCode) {
@@ -507,18 +501,7 @@ function keyReleased() {
         case 'A':
             if (multiplayerMode) player2.leftHeld = false;
             break;
-        case 'd':
-        case 'D':
-            if (multiplayerMode) player2.rightHeld = false;
-            break;
-        case 'R':
-            if (creatingLines) {
-                lines = [];
-                linesString = "";
-                mousePos1 = null;
-                mousePos2 = null;
-            }
-            break;
+        
         case 'N':
             if (creatingLines) {
                 levelNumber += 1;
@@ -534,12 +517,7 @@ function keyReleased() {
                 print(player.currentLevelNo);
             }
             break;
-        case 'D':
-            if (creatingLines) {
-
-                mousePos1 = null;
-                mousePos2 = null;
-            }
+        
     }
 
     switch (keyCode) {

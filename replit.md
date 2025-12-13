@@ -54,16 +54,15 @@ New behavior: A level only becomes a checkpoint once at least 5 AIs have reached
 ## Controls Summary
 ## Controls Summary
 - **Player 1:** Arrow keys (Left/Right movement), UP arrow or Space (press & hold to charge jump; release to perform jump)
-- **Player 2:** A/D (movement), W (jump) — only in local multiplayer mode
+- **Player 2:** A (left movement), W (jump) — only in local multiplayer mode
 - **B:** Replay the best player (AI mode)
 - **1:** Save the best AI brain to a downloadable JSON file (AI mode)
 - **2:** Open the file picker to import a brain or checkpoint JSON file (or drag/drop/double-click canvas)
 - **P:** Toggle checkpoint progression mode (start new generations from last-unlocked level)
  - **3:** Save a snapshot (brain + checkpoint) representing the current population state
  - **L:** Toggle auto-snapshot-on-new-level behavior (when enabled, pressing a key is not needed; snapshot is downloaded automatically on new level)
-- **R:** Reset players when not in line-creation mode; when creating lines, clears current level lines being drawn
 - **N:** When creating lines, create a new level; otherwise, increment current player's level (debug)
-- **D:** Cancels current line placement while creating lines
+ 
 - **S:** Stop all sounds
 - **- / _ / [ :** Decrease evolution speed
 - **= / + / ] :** Increase evolution speed

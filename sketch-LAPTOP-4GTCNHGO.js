@@ -215,9 +215,7 @@ function keyPressed() {
         case ' ':
             player.jumpHeld = true
             break;
-        case 'R':
-            population.ResetAllPlayers()
-            break;
+        
         case 'S':
             bumpSound.stop();
             jumpSound.stop();
@@ -248,14 +246,7 @@ function keyReleased() {
                 player.Jump()
             }
             break;
-        case 'R':
-            if (creatingLines) {
-                lines = [];
-                linesString = "";
-                mousePos1 = null;
-                mousePos2 = null;
-            }
-            break;
+        
         case 'N':
             if (creatingLines) {
                 levelNumber += 1;
@@ -271,12 +262,7 @@ function keyReleased() {
                 print(player.currentLevelNo);
             }
             break;
-        case 'D':
-            if (creatingLines) {
-
-                mousePos1 = null;
-                mousePos2 = null;
-            }
+        
     }
 
     switch (keyCode) {
