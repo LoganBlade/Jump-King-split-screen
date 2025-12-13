@@ -476,6 +476,11 @@ function keyReleased() {
             enableCheckpointMode = !enableCheckpointMode;
             alert('Checkpoint progression: ' + (enableCheckpointMode ? 'ON' : 'OFF'));
             break;
+        case 'L':
+            // Toggle auto snapshot saving on new level
+            window.autoSaveSnapshotsOnNewLevel = !window.autoSaveSnapshotsOnNewLevel;
+            alert('Auto snapshot on new level: ' + (window.autoSaveSnapshotsOnNewLevel ? 'ON' : 'OFF'));
+            break;
         // 'O' removed — carry actions always enabled
         case 'K':
             // K key intentionally does nothing now — reserved for future UI features
